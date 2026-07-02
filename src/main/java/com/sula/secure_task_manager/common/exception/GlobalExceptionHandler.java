@@ -2,6 +2,7 @@ package com.sula.secure_task_manager.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,19 +16,24 @@ import java.util.List;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(UserAlreadyExistsException.class)
-    @ResponseStatus(HttpStatus.CONFLICT)
-    public ErrorResponse handleUserAlreadyExists(
-            UserAlreadyExistsException exception,
+    @ExceptionHandler(ApiException.class)
+    @ResponseStatus
+    public ResponseEntity<ErrorResponse> handleApiException(
+            ApiException exception,
             HttpServletRequest request
     ) {
-        return buildErrorResponse(
-                HttpStatus.CONFLICT,
-                "USER_ALREADY_EXISTS",
+
+        ErrorResponse response = buildErrorResponse(
+                exception.getStatus(),
+                exception.getCode(),
                 exception.getMessage(),
                 request.getRequestURI(),
-                List.of(new FieldError("email", exception.getMessage()))
+                List.of(new FieldError(exception.getField(), exception.getMessage()))
         );
+
+        return ResponseEntity
+                .status(exception.getStatus())
+                .body(response);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
