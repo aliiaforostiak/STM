@@ -1,8 +1,11 @@
 package com.sula.secure_task_manager.manager.project.entity;
+import com.sula.secure_task_manager.common.entity.BaseEntity;
+import com.sula.secure_task_manager.manager.task.entity.Task;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(
@@ -17,7 +20,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @Builder
 @AllArgsConstructor
-public class Project {
+public class Project extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -32,25 +35,17 @@ public class Project {
     @Column(name = "owner_id", nullable = false)
     private Long ownerId;
 
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    @Builder.Default
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Task> tasks = new ArrayList<>();
 
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
-    @PrePersist
-    void onCreate() {
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        if (updatedAt == null) {
-            updatedAt = now;
-        }
+    public void addTask(Task task) {
+        tasks.add(task);
+        task.setProject(this);
     }
 
-    @PreUpdate
-    void onUpdate() {
-        updatedAt = Instant.now();
+    public void removeTask(Task task) {
+        tasks.remove(task);
+        task.setProject(null);
     }
 }

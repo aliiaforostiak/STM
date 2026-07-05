@@ -183,8 +183,6 @@ public class ProjectServiceTest {
             assertThat(captured.getName()).isEqualTo("Secure Task Manager");
             assertThat(captured.getDescription()).isEqualTo("Backend project");
             assertThat(captured.getOwnerId()).isEqualTo(userId);
-            assertThat(captured.getCreatedAt()).isNotNull();
-            assertThat(captured.getUpdatedAt()).isNotNull();
 
             assertThat(result.id()).isEqualTo(10L);
             assertThat(result.name()).isEqualTo("Secure Task Manager");
@@ -200,8 +198,6 @@ public class ProjectServiceTest {
                     .name("Secure Task Manager")
                     .description(null)
                     .ownerId(userId)
-                    .createdAt(Instant.now())
-                    .updatedAt(Instant.now())
                     .build();
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
@@ -226,8 +222,6 @@ public class ProjectServiceTest {
                     .name("Secure Task Manager")
                     .description("Backend project")
                     .ownerId(userId)
-                    .createdAt(Instant.now())
-                    .updatedAt(Instant.now())
                     .build();
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
@@ -303,7 +297,6 @@ public class ProjectServiceTest {
 
             assertThat(project.getName()).isEqualTo("New name");
             assertThat(project.getDescription()).isEqualTo("New description");
-            assertThat(project.getUpdatedAt()).isNotNull();
 
             verify(projectRepository).findById(projectId);
             verify(projectRepository).save(any(Project.class));
@@ -386,7 +379,6 @@ public class ProjectServiceTest {
 
             assertThat(project.getName()).isEqualTo("New name");
             assertThat(project.getDescription()).isEqualTo("Old description");
-            assertThat(project.getUpdatedAt()).isNotNull();
 
             verify(projectRepository).findById(projectId);
             verify(projectRepository).save(project);
@@ -420,7 +412,6 @@ public class ProjectServiceTest {
 
             assertThat(project.getName()).isEqualTo("Old name");
             assertThat(project.getDescription()).isEqualTo("New description");
-            assertThat(project.getUpdatedAt()).isNotNull();
 
             verify(projectRepository).findById(projectId);
             verify(projectRepository).save(project);

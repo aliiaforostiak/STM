@@ -1,6 +1,7 @@
 package com.sula.secure_task_manager.manager.task.entity;
 
 import com.sula.secure_task_manager.common.entity.BaseEntity;
+import com.sula.secure_task_manager.manager.project.entity.Project;
 import com.sula.secure_task_manager.manager.task.dto.TaskPriority;
 import com.sula.secure_task_manager.manager.task.dto.TaskStatus;
 import jakarta.persistence.*;
@@ -46,8 +47,9 @@ public class Task extends BaseEntity {
     @Column(nullable = false, length = 20)
     private TaskStatus status;
 
-    @Column(name = "project_id", nullable = false)
-    private Long projectId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "project_id", nullable = false)
+    private Project project;
 
     @Column(name = "creator_id", nullable = false)
     private Long creatorId;

@@ -16,7 +16,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -75,14 +74,10 @@ public class ProjectService {
             throw new ProjectAlreadyExistsException(normalizedName);
         }
 
-        Instant now = Instant.now();
-
         Project project = Project.builder()
                 .name(normalizedName)
                 .description(request.description())
                 .ownerId(ownerId)
-                .createdAt(now)
-                .updatedAt(now)
                 .build();
 
         Project savedProject = saveProject(project, normalizedName);
@@ -119,8 +114,6 @@ public class ProjectService {
         if (request.description() != null) {
             projectToUpdate.setDescription(request.description());
         }
-
-        projectToUpdate.setUpdatedAt(Instant.now());
 
         Project saved = saveProject(projectToUpdate, projectToUpdate.getName());
 
