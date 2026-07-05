@@ -30,11 +30,7 @@ public class ProjectController {
     @GetMapping
     @Operation(summary = "Get current user's projects", description = "Returns a list of projects owned by the authenticated user")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Projects returned successfully"),
-            @ApiResponse(responseCode = "401", description = "User is not authenticated",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class)))})
+            @ApiResponse(responseCode = "200", description = "Projects returned successfully")})
     public List<ProjectShortResponse> getMyProjects() {
         return projectService.getMyProjects();
     }
@@ -43,14 +39,6 @@ public class ProjectController {
     @Operation(summary = "Get project by ID", description = "Returns detailed information about a project by its ID")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Project returned successfully"),
-            @ApiResponse(responseCode = "401", description = "User is not authenticated",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "User does not have access to this project",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Project not found",
                     content = @Content(
                             mediaType = "application/json",
@@ -68,17 +56,7 @@ public class ProjectController {
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "401", description = "User is not authenticated",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Project already exists",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(
-                    responseCode = "500",
-                    description = "Unexpected server error",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class)))})
@@ -94,22 +72,8 @@ public class ProjectController {
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "401", description = "User is not authorized",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403",
-                    description = "User does not have access to this project",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404",
                     description = "Project not found",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "500",
-                    description = "Unexpected server error",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class)))})
@@ -122,22 +86,8 @@ public class ProjectController {
     @Operation(summary = "Delete project", description = "Delete project")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "Project deleted successfully"),
-            @ApiResponse(responseCode = "401", description = "User is not authorized",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403",
-                    description = "User does not have access to this project",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404",
                     description = "Project not found",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "500",
-                    description = "Unexpected server error",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class)))})
