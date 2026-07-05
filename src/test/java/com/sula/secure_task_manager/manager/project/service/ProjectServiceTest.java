@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Instant;
@@ -217,6 +218,32 @@ public class ProjectServiceTest {
         }
 
         @Test
+        void shouldTrimProjectName_whenCreatingProject() {
+            Long userId = 1L;
+            ProjectCreateRequest request = new ProjectCreateRequest("  Secure Task Manager  ", "Backend project");
+            Project savedProject = Project.builder()
+                    .id(10L)
+                    .name("Secure Task Manager")
+                    .description("Backend project")
+                    .ownerId(userId)
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build();
+
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
+            when(projectRepository.existsByOwnerIdAndName(userId, "Secure Task Manager")).thenReturn(false);
+            when(projectRepository.save(any(Project.class))).thenReturn(savedProject);
+
+            ProjectResponse result = projectService.createProject(request);
+            ArgumentCaptor<Project> projectCaptor = ArgumentCaptor.forClass(Project.class);
+
+            verify(projectRepository).save(projectCaptor.capture());
+
+            assertThat(projectCaptor.getValue().getName()).isEqualTo("Secure Task Manager");
+            assertThat(result.name()).isEqualTo("Secure Task Manager");
+        }
+
+        @Test
         void shouldThrow_whenProjectWithSameNameAlreadyExists() {
             Long userId = 1L;
 
@@ -234,6 +261,21 @@ public class ProjectServiceTest {
                     .hasMessage("Project with name 'Secure Task Manager' already exists");
 
             verify(projectRepository, never()).save(any(Project.class));
+        }
+
+        @Test
+        void shouldThrow_whenUniqueConstraintIsViolatedDuringSave() {
+            Long userId = 1L;
+            ProjectCreateRequest request = new ProjectCreateRequest("Secure Task Manager", "Backend project");
+
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
+            when(projectRepository.existsByOwnerIdAndName(userId, "Secure Task Manager")).thenReturn(false);
+            when(projectRepository.save(any(Project.class)))
+                    .thenThrow(new DataIntegrityViolationException("duplicate", new RuntimeException("uq_projects_owner_name")));
+
+            assertThatThrownBy(() -> projectService.createProject(request))
+                    .isInstanceOf(ProjectAlreadyExistsException.class)
+                    .hasMessage("Project with name 'Secure Task Manager' already exists");
         }
     }
 
@@ -382,6 +424,31 @@ public class ProjectServiceTest {
 
             verify(projectRepository).findById(projectId);
             verify(projectRepository).save(project);
+        }
+
+        @Test
+        void shouldTrimProjectName_whenUpdatingProject() {
+            Long userId = 1L;
+            Long projectId = 1L;
+
+            Project project = Project.builder()
+                    .id(projectId)
+                    .name("Old name")
+                    .description("Old description")
+                    .ownerId(userId)
+                    .build();
+
+            ProjectUpdateRequest request = new ProjectUpdateRequest("  New name  ", null);
+
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
+            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectRepository.existsByOwnerIdAndName(userId, "New name")).thenReturn(false);
+            when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ProjectResponse result = projectService.updateProject(projectId, request);
+
+            assertThat(project.getName()).isEqualTo("New name");
+            assertThat(result.name()).isEqualTo("New name");
         }
     }
 

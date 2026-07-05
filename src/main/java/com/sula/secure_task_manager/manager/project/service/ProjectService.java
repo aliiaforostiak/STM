@@ -11,6 +11,8 @@ import com.sula.secure_task_manager.manager.project.exception.ProjectAlreadyExis
 import com.sula.secure_task_manager.manager.project.repository.ProjectRepository;
 import com.sula.secure_task_manager.security.principal.CurrentUserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ProjectService {
+
+    private static final String PROJECT_OWNER_NAME_CONSTRAINT = "uq_projects_owner_name";
 
     private final ProjectRepository projectRepository;
     private final CurrentUserService currentUserService;
@@ -65,22 +69,23 @@ public class ProjectService {
     public ProjectResponse createProject(ProjectCreateRequest request) {
 
         Long ownerId = currentUserService.getCurrentUserId();
+        String normalizedName = normalizeProjectName(request.name());
 
-        if (projectRepository.existsByOwnerIdAndName(ownerId, request.name())) {
-            throw new ProjectAlreadyExistsException(request.name());
+        if (projectRepository.existsByOwnerIdAndName(ownerId, normalizedName)) {
+            throw new ProjectAlreadyExistsException(normalizedName);
         }
 
         Instant now = Instant.now();
 
         Project project = Project.builder()
-                .name(request.name())
+                .name(normalizedName)
                 .description(request.description())
                 .ownerId(ownerId)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
 
-        Project savedProject = projectRepository.save(project);
+        Project savedProject = saveProject(project, normalizedName);
 
         return toResponse(savedProject);
     }
@@ -101,7 +106,14 @@ public class ProjectService {
         }
 
         if (request.name() != null) {
-            projectToUpdate.setName(request.name());
+            String normalizedName = normalizeProjectName(request.name());
+
+            if (!normalizedName.equals(projectToUpdate.getName())
+                    && projectRepository.existsByOwnerIdAndName(userId, normalizedName)) {
+                throw new ProjectAlreadyExistsException(normalizedName);
+            }
+
+            projectToUpdate.setName(normalizedName);
         }
 
         if (request.description() != null) {
@@ -110,7 +122,7 @@ public class ProjectService {
 
         projectToUpdate.setUpdatedAt(Instant.now());
 
-        Project saved = projectRepository.save(projectToUpdate);
+        Project saved = saveProject(projectToUpdate, projectToUpdate.getName());
 
         return toResponse(saved);
     }
@@ -127,5 +139,34 @@ public class ProjectService {
         }
 
         projectRepository.delete(project);
+    }
+
+    private Project saveProject(Project project, String projectName) {
+        try {
+            return projectRepository.save(project);
+        } catch (DataIntegrityViolationException exception) {
+            if (isProjectNameConflict(exception)) {
+                throw new ProjectAlreadyExistsException(projectName);
+            }
+
+            throw exception;
+        }
+    }
+
+    private String normalizeProjectName(String name) {
+        String normalizedName = name.strip();
+
+        if (normalizedName.isBlank()) {
+            throw new BadRequestException("Project name is required", "name");
+        }
+
+        return normalizedName;
+    }
+
+    private boolean isProjectNameConflict(DataIntegrityViolationException exception) {
+        Throwable rootCause = NestedExceptionUtils.getMostSpecificCause(exception);
+        return rootCause != null
+                && rootCause.getMessage() != null
+                && rootCause.getMessage().contains(PROJECT_OWNER_NAME_CONSTRAINT);
     }
 }

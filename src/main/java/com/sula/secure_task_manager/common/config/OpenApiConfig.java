@@ -5,6 +5,10 @@ import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
+import org.springdoc.core.customizers.GlobalOperationCustomizer;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
@@ -23,4 +27,20 @@ import org.springframework.context.annotation.Configuration;
         in = SecuritySchemeIn.HEADER
 )
 public class OpenApiConfig {
+
+    @Bean
+    public GlobalOperationCustomizer global500ResponseCustomizer() {
+        return (operation, handlerMethod) -> {
+            if (operation.getResponses() == null) {
+                operation.setResponses(new ApiResponses());
+            }
+
+            operation.getResponses().putIfAbsent(
+                    "500",
+                    new ApiResponse().description("Internal Server Error")
+            );
+
+            return operation;
+        };
+    }
 }
