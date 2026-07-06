@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Testcontainers
 @Import(JpaAuditingConfig.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-class TaskRepositoryPostgresTest {
+class TaskRepositoryPostgresIT {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");

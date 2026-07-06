@@ -1,0 +1,8 @@
+.git
+.github
+.idea
+target
+README.md
+HELP.md
+*.iml
+.DS_Store

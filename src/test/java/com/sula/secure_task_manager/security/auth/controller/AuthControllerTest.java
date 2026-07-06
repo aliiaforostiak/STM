@@ -24,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@SuppressWarnings("removal")
 @WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)

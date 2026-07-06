@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("removal")
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional

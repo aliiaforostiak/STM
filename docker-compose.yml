@@ -1,6 +1,31 @@
 version: "3.9"
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: secure-task-manager-app
+    restart: unless-stopped
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/secure_task_manager
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      APP_JWT_SECRET: secure-task-manager-demo-jwt-secret-key-2026-please-change
+      APP_JWT_EXPIRATION_MS: 3600000
+      APP_JWT_REFRESH_EXPIRATION_MS: 604800000
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   postgres:
     image: postgres:16
