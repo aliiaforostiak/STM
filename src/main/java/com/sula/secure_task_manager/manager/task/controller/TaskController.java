@@ -1,5 +1,6 @@
 package com.sula.secure_task_manager.manager.task.controller;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.sula.secure_task_manager.common.exception.response.ErrorResponse;
 import com.sula.secure_task_manager.manager.task.dto.TaskCreateRequest;
 import com.sula.secure_task_manager.manager.task.dto.TaskResponse;
@@ -48,6 +49,22 @@ public class TaskController {
     })
     public List<TaskShortResponse> getProjectTasks(@PathVariable Long projectId) {
         return taskService.getProjectTasks(projectId);
+    }
+
+    @GetMapping("/api/projects/{projectId}/tasks/paged")
+    @Operation(summary = "Get project tasks page", description = "Returns a paginated list of tasks that belong to the specified project")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Tasks page returned successfully"),
+            @ApiResponse(responseCode = "404", description = "Project not found",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public PageResponse<TaskShortResponse> getProjectTasksPage(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return taskService.getProjectTasksPage(projectId, page, size);
     }
 
     @PostMapping("/api/tasks")

@@ -1,10 +1,11 @@
 package com.sula.secure_task_manager.manager.task.service;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.sula.secure_task_manager.common.exception.base.BadRequestException;
 import com.sula.secure_task_manager.common.exception.base.ResourceNotFoundException;
 import com.sula.secure_task_manager.manager.project.dto.ProjectShortResponse;
 import com.sula.secure_task_manager.manager.project.entity.Project;
-import com.sula.secure_task_manager.manager.project.repository.ProjectRepository;
+import com.sula.secure_task_manager.manager.project.service.ProjectAccessService;
 import com.sula.secure_task_manager.manager.task.dto.TaskCreateRequest;
 import com.sula.secure_task_manager.manager.task.dto.TaskPriority;
 import com.sula.secure_task_manager.manager.task.dto.TaskResponse;
@@ -25,6 +26,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Instant;
@@ -47,7 +50,7 @@ class TaskServiceTest {
     private TaskRepository taskRepository;
 
     @Mock
-    private ProjectRepository projectRepository;
+    private ProjectAccessService projectAccessService;
 
     @Mock
     private UserRepository userRepository;
@@ -74,6 +77,7 @@ class TaskServiceTest {
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+            when(projectAccessService.getAccessibleProject(project, userId, "task")).thenReturn(project);
             when(userRepository.findById(creator.getId())).thenReturn(Optional.of(creator));
             when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
 
@@ -97,11 +101,15 @@ class TaskServiceTest {
 
         @Test
         void shouldThrowForbidden_whenUserDoesNotOwnTaskProject() {
-            Task task = task(10L, project(20L, 99L, "Secure Task Manager"), 7L, 8L, TaskStatus.TODO);
+            Long userId = 1L;
             Project project = project(20L, 99L, "Secure Task Manager");
+            Task task = task(10L, project, 7L, 8L, TaskStatus.TODO);
 
-            when(currentUserService.getCurrentUserId()).thenReturn(1L);
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+            when(projectAccessService.getAccessibleProject(project, userId, "task"))
+                    .thenThrow(new AccessDeniedException("You do not have access to this task"));
+
             assertThatThrownBy(() -> taskService.getTaskById(10L))
                     .isInstanceOf(AccessDeniedException.class);
 
@@ -116,10 +124,10 @@ class TaskServiceTest {
         void shouldReturnProjectTasks_whenUserOwnsProject() {
             Long userId = 1L;
             Long projectId = 20L;
+            Project project = project(projectId, userId, "Secure Task Manager");
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            Project project = project(projectId, userId, "Secure Task Manager");
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
             when(taskRepository.findAllByProject_Id(projectId)).thenReturn(List.of(
                     task(10L, project, 7L, 8L, TaskStatus.TODO),
                     task(11L, project, 7L, null, TaskStatus.IN_PROGRESS)
@@ -138,12 +146,37 @@ class TaskServiceTest {
         @Test
         void shouldThrowForbidden_whenUserDoesNotOwnProject() {
             when(currentUserService.getCurrentUserId()).thenReturn(1L);
-            when(projectRepository.findById(20L)).thenReturn(Optional.of(project(20L, 99L, "Secure Task Manager")));
+            when(projectAccessService.getAccessibleProject(20L, 1L, "project"))
+                    .thenThrow(new AccessDeniedException("You do not have access to this project"));
 
             assertThatThrownBy(() -> taskService.getProjectTasks(20L))
                     .isInstanceOf(AccessDeniedException.class);
 
             verify(taskRepository, never()).findAllByProject_Id(any());
+        }
+
+        @Test
+        void shouldReturnProjectTasksPage_whenUserOwnsProject() {
+            Long userId = 1L;
+            Long projectId = 20L;
+            Project project = project(projectId, userId, "Secure Task Manager");
+            List<Task> tasks = List.of(
+                    task(10L, project, 7L, 8L, TaskStatus.TODO),
+                    task(11L, project, 7L, null, TaskStatus.IN_PROGRESS)
+            );
+
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
+            when(taskRepository.findAllByProject_Id(projectId, PageRequest.of(0, 2)))
+                    .thenReturn(new PageImpl<>(tasks, PageRequest.of(0, 2), 3));
+
+            PageResponse<TaskShortResponse> result = taskService.getProjectTasksPage(projectId, 0, 2);
+
+            assertThat(result.content()).hasSize(2);
+            assertThat(result.page()).isEqualTo(0);
+            assertThat(result.size()).isEqualTo(2);
+            assertThat(result.totalElements()).isEqualTo(3);
+            assertThat(result.totalPages()).isEqualTo(2);
         }
     }
 
@@ -154,6 +187,7 @@ class TaskServiceTest {
         void shouldCreateTask() {
             Long userId = 1L;
             Long projectId = 20L;
+            Project project = project(projectId, userId, "Secure Task Manager");
             User assignee = user(8L, "assignee@example.com");
             TaskCreateRequest request = new TaskCreateRequest(
                     "Implement JWT login",
@@ -165,7 +199,7 @@ class TaskServiceTest {
             );
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project(projectId, userId, "Secure Task Manager")));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
             when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user(userId, "owner@example.com")));
             when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
@@ -186,7 +220,6 @@ class TaskServiceTest {
             assertThat(captured.getAssigneeId()).isEqualTo(assignee.getId());
             assertThat(captured.getPriority()).isEqualTo(TaskPriority.HIGH);
             assertThat(captured.getStatus()).isEqualTo(TaskStatus.TODO);
-
             assertThat(result.id()).isEqualTo(10L);
             assertThat(result.status()).isEqualTo(TaskStatus.TODO);
             assertThat(result.creator()).isEqualTo(new UserShortResponse(userId, "owner@example.com"));
@@ -197,6 +230,7 @@ class TaskServiceTest {
         void shouldThrowNotFound_whenAssigneeDoesNotExist() {
             Long userId = 1L;
             Long projectId = 20L;
+            Project project = project(projectId, userId, "Secure Task Manager");
             TaskCreateRequest request = new TaskCreateRequest(
                     "Implement JWT login",
                     "Add access token generation and login endpoint",
@@ -207,7 +241,7 @@ class TaskServiceTest {
             );
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project(projectId, userId, "Secure Task Manager")));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
             when(userRepository.findById(8L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> taskService.createTask(request))
@@ -241,6 +275,7 @@ class TaskServiceTest {
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+            when(projectAccessService.getAccessibleProject(project, userId, "task")).thenReturn(project);
             when(userRepository.findById(creator.getId())).thenReturn(Optional.of(creator));
             when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
             when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -257,18 +292,15 @@ class TaskServiceTest {
 
         @Test
         void shouldThrowBadRequest_whenStatusTransitionIsInvalid() {
-            Task task = task(10L, project(20L, 1L, "Secure Task Manager"), 7L, 8L, TaskStatus.TODO);
-            TaskUpdateRequest request = new TaskUpdateRequest(
-                    null,
-                    null,
-                    null,
-                    TaskStatus.DONE,
-                    null,
-                    null
-            );
+            Long userId = 1L;
+            Project project = project(20L, userId, "Secure Task Manager");
+            Task task = task(10L, project, 7L, 8L, TaskStatus.TODO);
+            TaskUpdateRequest request = new TaskUpdateRequest(null, null, null, TaskStatus.DONE, null, null);
 
-            when(currentUserService.getCurrentUserId()).thenReturn(1L);
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+            when(projectAccessService.getAccessibleProject(project, userId, "task")).thenReturn(project);
+
             assertThatThrownBy(() -> taskService.updateTask(10L, request))
                     .isInstanceOf(BadRequestException.class);
 
@@ -290,10 +322,14 @@ class TaskServiceTest {
 
         @Test
         void shouldDeleteTask_whenUserOwnsProject() {
-            Task task = task(10L, project(20L, 1L, "Secure Task Manager"), 7L, 8L, TaskStatus.TODO);
+            Long userId = 1L;
+            Project project = project(20L, userId, "Secure Task Manager");
+            Task task = task(10L, project, 7L, 8L, TaskStatus.TODO);
 
-            when(currentUserService.getCurrentUserId()).thenReturn(1L);
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+            when(projectAccessService.getAccessibleProject(project, userId, "task")).thenReturn(project);
+
             taskService.deleteTask(10L);
 
             verify(taskRepository).delete(task);
@@ -302,10 +338,15 @@ class TaskServiceTest {
 
         @Test
         void shouldThrowForbidden_whenUserDoesNotOwnProject() {
-            Task task = task(10L, project(20L, 99L, "Secure Task Manager"), 7L, 8L, TaskStatus.TODO);
+            Long userId = 1L;
+            Project project = project(20L, 99L, "Secure Task Manager");
+            Task task = task(10L, project, 7L, 8L, TaskStatus.TODO);
 
-            when(currentUserService.getCurrentUserId()).thenReturn(1L);
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+            when(projectAccessService.getAccessibleProject(project, userId, "task"))
+                    .thenThrow(new AccessDeniedException("You do not have access to this task"));
+
             assertThatThrownBy(() -> taskService.deleteTask(10L))
                     .isInstanceOf(AccessDeniedException.class);
 

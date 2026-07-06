@@ -1,5 +1,6 @@
 package com.sula.secure_task_manager.manager.project.controller;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.sula.secure_task_manager.common.exception.response.ErrorResponse;
 import com.sula.secure_task_manager.manager.project.dto.ProjectCreateRequest;
 import com.sula.secure_task_manager.manager.project.dto.ProjectResponse;
@@ -33,6 +34,17 @@ public class ProjectController {
             @ApiResponse(responseCode = "200", description = "Projects returned successfully")})
     public List<ProjectShortResponse> getMyProjects() {
         return projectService.getMyProjects();
+    }
+
+    @GetMapping("/paged")
+    @Operation(summary = "Get current user's projects page", description = "Returns a paginated list of projects owned by the authenticated user")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Projects page returned successfully")})
+    public PageResponse<ProjectShortResponse> getMyProjectsPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return projectService.getMyProjectsPage(page, size);
     }
 
     @GetMapping("/{id}")

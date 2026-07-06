@@ -1,5 +1,6 @@
 package com.sula.secure_task_manager.manager.project.controller;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sula.secure_task_manager.common.exception.base.ApiException;
 import com.sula.secure_task_manager.common.exception.base.BadRequestException;
@@ -110,6 +111,34 @@ class ProjectControllerTest {
                     .andExpect(jsonPath("$").isEmpty());
 
             verify(projectService).getMyProjects();
+        }
+
+        @Test
+        void getMyProjectsPage_shouldReturnPagedProjects() throws Exception {
+            PageResponse<ProjectShortResponse> response = new PageResponse<>(
+                    List.of(
+                            new ProjectShortResponse(1L, "Secure Task Manager"),
+                            new ProjectShortResponse(2L, "Learning Platform")
+                    ),
+                    0,
+                    2,
+                    5,
+                    3,
+                    true,
+                    false
+            );
+
+            when(projectService.getMyProjectsPage(0, 2)).thenReturn(response);
+
+            mockMvc.perform(get("/api/projects/paged?page=0&size=2"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content", hasSize(2)))
+                    .andExpect(jsonPath("$.page").value(0))
+                    .andExpect(jsonPath("$.size").value(2))
+                    .andExpect(jsonPath("$.totalElements").value(5))
+                    .andExpect(jsonPath("$.totalPages").value(3));
+
+            verify(projectService).getMyProjectsPage(0, 2);
         }
     }
 

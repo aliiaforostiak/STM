@@ -1,10 +1,11 @@
 package com.sula.secure_task_manager.manager.task.service;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.sula.secure_task_manager.common.exception.base.BadRequestException;
 import com.sula.secure_task_manager.common.exception.base.ResourceNotFoundException;
 import com.sula.secure_task_manager.manager.project.dto.ProjectShortResponse;
 import com.sula.secure_task_manager.manager.project.entity.Project;
-import com.sula.secure_task_manager.manager.project.repository.ProjectRepository;
+import com.sula.secure_task_manager.manager.project.service.ProjectAccessService;
 import com.sula.secure_task_manager.manager.task.dto.TaskCreateRequest;
 import com.sula.secure_task_manager.manager.task.dto.TaskResponse;
 import com.sula.secure_task_manager.manager.task.dto.TaskShortResponse;
@@ -17,7 +18,7 @@ import com.sula.secure_task_manager.manager.user.UserRepository;
 import com.sula.secure_task_manager.manager.user.dto.UserShortResponse;
 import com.sula.secure_task_manager.security.principal.CurrentUserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,7 +28,7 @@ import java.util.List;
 public class TaskService {
 
     private final TaskRepository taskRepository;
-    private final ProjectRepository projectRepository;
+    private final ProjectAccessService projectAccessService;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
 
@@ -52,6 +53,20 @@ public class TaskService {
                         task.getPriority()
                 ))
                 .toList();
+    }
+
+    public PageResponse<TaskShortResponse> getProjectTasksPage(Long projectId, int page, int size) {
+        getAccessibleProject(projectId, "project");
+
+        return PageResponse.from(
+                taskRepository.findAllByProject_Id(projectId, PageRequest.of(page, size))
+                        .map(task -> new TaskShortResponse(
+                                task.getId(),
+                                task.getTitle(),
+                                task.getStatus(),
+                                task.getPriority()
+                        ))
+        );
     }
 
     public TaskResponse createTask(TaskCreateRequest request) {
@@ -141,25 +156,12 @@ public class TaskService {
 
     private Project getAccessibleProject(Long projectId, String resourceName) {
         Long currentUserId = currentUserService.getCurrentUserId();
-
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
-
-        if (!project.getOwnerId().equals(currentUserId)) {
-            throw new AccessDeniedException("You do not have access to this " + resourceName);
-        }
-
-        return project;
+        return projectAccessService.getAccessibleProject(projectId, currentUserId, resourceName);
     }
 
     private Project getAccessibleProject(Project project, String resourceName) {
         Long currentUserId = currentUserService.getCurrentUserId();
-
-        if (!project.getOwnerId().equals(currentUserId)) {
-            throw new AccessDeniedException("You do not have access to this " + resourceName);
-        }
-
-        return project;
+        return projectAccessService.getAccessibleProject(project, currentUserId, resourceName);
     }
 
     private User getUser(Long userId) {

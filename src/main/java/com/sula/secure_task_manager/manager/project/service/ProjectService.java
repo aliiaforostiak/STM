@@ -1,5 +1,6 @@
 package com.sula.secure_task_manager.manager.project.service;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.sula.secure_task_manager.common.exception.base.BadRequestException;
 import com.sula.secure_task_manager.common.exception.base.ResourceNotFoundException;
 import com.sula.secure_task_manager.manager.project.dto.ProjectCreateRequest;
@@ -13,7 +14,7 @@ import com.sula.secure_task_manager.security.principal.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,6 +27,7 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final CurrentUserService currentUserService;
+    private final ProjectAccessService projectAccessService;
 
     public List<ProjectShortResponse> getMyProjects() {
         Long ownerId = currentUserService.getCurrentUserId();
@@ -36,6 +38,15 @@ public class ProjectService {
                 .toList();
     }
 
+    public PageResponse<ProjectShortResponse> getMyProjectsPage(int page, int size) {
+        Long ownerId = currentUserService.getCurrentUserId();
+
+        return PageResponse.from(
+                projectRepository.findAllByOwnerId(ownerId, PageRequest.of(page, size))
+                        .map(this::toShortResponse)
+        );
+    }
+
     private ProjectShortResponse toShortResponse(Project project) {
         return new ProjectShortResponse(project.getId(), project.getName());
     }
@@ -44,12 +55,7 @@ public class ProjectService {
 
         Long userId = currentUserService.getCurrentUserId();
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
-
-        if (!project.getOwnerId().equals(userId)) {
-            throw new AccessDeniedException("Yau are not owner of this project");
-        }
+        Project project = projectAccessService.getAccessibleProject(projectId, userId, "project");
 
         return toResponse(project);
     }
@@ -93,12 +99,7 @@ public class ProjectService {
 
         Long userId = currentUserService.getCurrentUserId();
 
-        Project projectToUpdate = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
-
-        if (!projectToUpdate.getOwnerId().equals(userId)) {
-            throw new AccessDeniedException("You are not owner of this project");
-        }
+        Project projectToUpdate = projectAccessService.getAccessibleProject(projectId, userId, "project");
 
         if (request.name() != null) {
             String normalizedName = normalizeProjectName(request.name());
@@ -124,12 +125,7 @@ public class ProjectService {
 
         Long userId = currentUserService.getCurrentUserId();
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
-
-        if (!project.getOwnerId().equals(userId)) {
-            throw new AccessDeniedException("You are not owner of this project");
-        }
+        Project project = projectAccessService.getAccessibleProject(projectId, userId, "project");
 
         projectRepository.delete(project);
     }

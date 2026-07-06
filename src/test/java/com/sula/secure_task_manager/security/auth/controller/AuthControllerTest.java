@@ -1,23 +1,23 @@
 package com.sula.secure_task_manager.security.auth.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sula.secure_task_manager.common.exception.handler.GlobalExceptionHandler;
+import com.sula.secure_task_manager.manager.user.exception.UserAlreadyExistsException;
 import com.sula.secure_task_manager.security.auth.dto.LoginRequest;
 import com.sula.secure_task_manager.security.auth.dto.LoginResponse;
 import com.sula.secure_task_manager.security.auth.dto.RegisterRequest;
 import com.sula.secure_task_manager.security.auth.dto.RegisterResponse;
 import com.sula.secure_task_manager.security.auth.service.AuthService;
-import com.sula.secure_task_manager.common.exception.handler.GlobalExceptionHandler;
 import com.sula.secure_task_manager.security.jwt.JwtService;
-import com.sula.secure_task_manager.manager.user.exception.UserAlreadyExistsException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -35,13 +35,13 @@ class AuthControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private AuthService authService;
 
-    @MockBean
+    @MockitoBean
     private JwtService jwtService;
 
-    @MockBean
+    @MockitoBean
     private UserDetailsService userDetailsService;
 
     @Test

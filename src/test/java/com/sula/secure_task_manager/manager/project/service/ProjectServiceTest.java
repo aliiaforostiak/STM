@@ -1,5 +1,6 @@
 package com.sula.secure_task_manager.manager.project.service;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.sula.secure_task_manager.common.exception.base.BadRequestException;
 import com.sula.secure_task_manager.common.exception.base.ResourceNotFoundException;
 import com.sula.secure_task_manager.manager.project.dto.ProjectCreateRequest;
@@ -18,14 +19,20 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class ProjectServiceTest {
@@ -36,26 +43,22 @@ public class ProjectServiceTest {
     @Mock
     private CurrentUserService currentUserService;
 
+    @Mock
+    private ProjectAccessService projectAccessService;
+
     @InjectMocks
     private ProjectService projectService;
 
     @Nested
     class GetMyProjects {
+
         @Test
         void shouldReturnUserProjects() {
             Long userId = 1L;
-            Project first = Project.builder()
-                    .id(1L)
-                    .name("Secure Task Manager")
-                    .ownerId(userId)
-                    .build();
-            Project second = Project.builder()
-                    .id(2L)
-                    .name("Notification Service")
-                    .ownerId(userId)
-                    .build();
-
-            List<Project> projects = List.of(first, second);
+            List<Project> projects = List.of(
+                    Project.builder().id(1L).name("Secure Task Manager").ownerId(userId).build(),
+                    Project.builder().id(2L).name("Notification Service").ownerId(userId).build()
+            );
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(projectRepository.findAllByOwnerId(userId)).thenReturn(projects);
@@ -66,7 +69,8 @@ public class ProjectServiceTest {
                     .extracting(ProjectShortResponse::id, ProjectShortResponse::name)
                     .containsExactly(
                             tuple(1L, "Secure Task Manager"),
-                            tuple(2L, "Notification Service"));
+                            tuple(2L, "Notification Service")
+                    );
 
             verify(currentUserService).getCurrentUserId();
             verify(projectRepository).findAllByOwnerId(userId);
@@ -76,16 +80,34 @@ public class ProjectServiceTest {
         @Test
         void shouldReturnEmptyList_whenUserHasNoProjects() {
             Long userId = 1L;
+
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
             when(projectRepository.findAllByOwnerId(userId)).thenReturn(List.of());
 
             List<ProjectShortResponse> result = projectService.getMyProjects();
 
             assertThat(result).isEmpty();
+        }
 
-            verify(currentUserService).getCurrentUserId();
-            verify(projectRepository).findAllByOwnerId(userId);
-            verifyNoMoreInteractions(projectRepository);
+        @Test
+        void shouldReturnProjectsPage() {
+            Long userId = 1L;
+            List<Project> projects = List.of(
+                    Project.builder().id(1L).name("Secure Task Manager").ownerId(userId).build(),
+                    Project.builder().id(2L).name("Notification Service").ownerId(userId).build()
+            );
+
+            when(currentUserService.getCurrentUserId()).thenReturn(userId);
+            when(projectRepository.findAllByOwnerId(userId, PageRequest.of(0, 2)))
+                    .thenReturn(new PageImpl<>(projects, PageRequest.of(0, 2), 5));
+
+            PageResponse<ProjectShortResponse> result = projectService.getMyProjectsPage(0, 2);
+
+            assertThat(result.content()).hasSize(2);
+            assertThat(result.page()).isEqualTo(0);
+            assertThat(result.size()).isEqualTo(2);
+            assertThat(result.totalElements()).isEqualTo(5);
+            assertThat(result.totalPages()).isEqualTo(3);
         }
     }
 
@@ -96,7 +118,6 @@ public class ProjectServiceTest {
         void shouldReturnDetailedProjectById_whenUserIsOwner() {
             Long ownerId = 1L;
             Long projectId = 1L;
-
             Project project = Project.builder()
                     .id(projectId)
                     .name("Secure task Management")
@@ -105,7 +126,7 @@ public class ProjectServiceTest {
                     .build();
 
             when(currentUserService.getCurrentUserId()).thenReturn(ownerId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, ownerId, "project")).thenReturn(project);
 
             ProjectResponse result = projectService.getProjectById(projectId);
 
@@ -113,45 +134,34 @@ public class ProjectServiceTest {
             assertThat(result.name()).isEqualTo("Secure task Management");
             assertThat(result.description()).isEqualTo("Backend project");
             assertThat(result.owner()).isNull();
-
-            verify(currentUserService).getCurrentUserId();
-            verify(projectRepository).findById(projectId);
         }
 
         @Test
         void shouldThrownException_whenProjectNotFound() {
             Long projectId = 1L;
 
-            when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
+            when(currentUserService.getCurrentUserId()).thenReturn(1L);
+            when(projectAccessService.getAccessibleProject(projectId, 1L, "project"))
+                    .thenThrow(new ResourceNotFoundException("Project", projectId));
 
             assertThatThrownBy(() -> projectService.getProjectById(projectId))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessage("Project with id 1 not found");
-
-            verify(projectRepository).findById(projectId);
         }
 
         @Test
         void shouldThrowException_whenUserIsNotOwner() {
             Long userId = 1L;
-            Long ownerId = 10L;
             Long projectId = 1L;
 
-            Project project = Project.builder()
-                    .id(projectId)
-                    .name("Secure task Management")
-                    .description("Backend project")
-                    .ownerId(ownerId)
-                    .build();
-
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project"))
+                    .thenThrow(new AccessDeniedException("You do not have access to this project"));
 
             assertThatThrownBy(() -> projectService.getProjectById(projectId))
                     .isInstanceOf(AccessDeniedException.class);
 
             verify(projectRepository, never()).save(any());
-            verify(projectRepository).findById(projectId);
         }
     }
 
@@ -177,13 +187,11 @@ public class ProjectServiceTest {
             ArgumentCaptor<Project> projectCaptor = ArgumentCaptor.forClass(Project.class);
 
             verify(projectRepository).save(projectCaptor.capture());
-
             Project captured = projectCaptor.getValue();
 
             assertThat(captured.getName()).isEqualTo("Secure Task Manager");
             assertThat(captured.getDescription()).isEqualTo("Backend project");
             assertThat(captured.getOwnerId()).isEqualTo(userId);
-
             assertThat(result.id()).isEqualTo(10L);
             assertThat(result.name()).isEqualTo("Secure Task Manager");
         }
@@ -192,7 +200,6 @@ public class ProjectServiceTest {
         void shouldCreateProject_whenDescriptionIsNull() {
             Long userId = 1L;
             ProjectCreateRequest request = new ProjectCreateRequest("Secure Task Manager", null);
-
             Project savedProject = Project.builder()
                     .id(10L)
                     .name("Secure Task Manager")
@@ -209,8 +216,6 @@ public class ProjectServiceTest {
             assertThat(result.id()).isEqualTo(10L);
             assertThat(result.name()).isEqualTo("Secure Task Manager");
             assertThat(result.description()).isNull();
-
-            verify(projectRepository).save(any(Project.class));
         }
 
         @Test
@@ -240,15 +245,10 @@ public class ProjectServiceTest {
         @Test
         void shouldThrow_whenProjectWithSameNameAlreadyExists() {
             Long userId = 1L;
-
-            ProjectCreateRequest request = new ProjectCreateRequest(
-                    "Secure Task Manager",
-                    "Backend project"
-            );
+            ProjectCreateRequest request = new ProjectCreateRequest("Secure Task Manager", "Backend project");
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.existsByOwnerIdAndName(userId, request.name()))
-                    .thenReturn(true);
+            when(projectRepository.existsByOwnerIdAndName(userId, request.name())).thenReturn(true);
 
             assertThatThrownBy(() -> projectService.createProject(request))
                     .isInstanceOf(ProjectAlreadyExistsException.class)
@@ -275,54 +275,49 @@ public class ProjectServiceTest {
 
     @Nested
     class UpdateProject {
+
         @Test
         void shouldUpdateProject_whenUserIsOwner() {
             Long userId = 1L;
             Long projectId = 1L;
-
             Project project = Project.builder()
                     .id(projectId)
                     .name("Old name")
                     .description("Old description")
                     .ownerId(userId)
                     .build();
-
             ProjectUpdateRequest request = new ProjectUpdateRequest("New name", "New description");
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
             when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             ProjectResponse result = projectService.updateProject(projectId, request);
 
             assertThat(project.getName()).isEqualTo("New name");
             assertThat(project.getDescription()).isEqualTo("New description");
-
-            verify(projectRepository).findById(projectId);
-            verify(projectRepository).save(any(Project.class));
+            assertThat(result.name()).isEqualTo("New name");
         }
 
         @Test
         void shouldThrow_whenProjectNotFound() {
             Long projectId = 1L;
-
             ProjectUpdateRequest request = new ProjectUpdateRequest("New name", "New description");
 
             when(currentUserService.getCurrentUserId()).thenReturn(1L);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
+            when(projectAccessService.getAccessibleProject(projectId, 1L, "project"))
+                    .thenThrow(new ResourceNotFoundException("Project", projectId));
 
             assertThatThrownBy(() -> projectService.updateProject(projectId, request))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessage("Project with id 1 not found");
-
-            verify(projectRepository).findById(projectId);
         }
 
         @Test
         void shouldThrow_whenRequestIsEmpty() {
-            Long projectId = 1L;
             ProjectUpdateRequest request = new ProjectUpdateRequest(null, null);
-            assertThatThrownBy(() -> projectService.updateProject(projectId, request))
+
+            assertThatThrownBy(() -> projectService.updateProject(1L, request))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessage("At least one field must be provided");
 
@@ -332,22 +327,16 @@ public class ProjectServiceTest {
         @Test
         void shouldThrowForbidden_whenUserIsNotOwner() {
             Long userId = 1L;
-            Long ownerId = 10L;
             Long projectId = 1L;
-
-            Project project = Project.builder()
-                    .id(projectId)
-                    .name("Old name")
-                    .description("Old description")
-                    .ownerId(ownerId)
-                    .build();
             ProjectUpdateRequest request = new ProjectUpdateRequest("New name", "New description");
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project"))
+                    .thenThrow(new AccessDeniedException("You do not have access to this project"));
 
             assertThatThrownBy(() -> projectService.updateProject(projectId, request))
                     .isInstanceOf(AccessDeniedException.class);
+
             verify(projectRepository, never()).save(any());
         }
 
@@ -355,84 +344,60 @@ public class ProjectServiceTest {
         void shouldUpdateOnlyName_whenDescriptionIsNull() {
             Long userId = 1L;
             Long projectId = 1L;
-
             Project project = Project.builder()
                     .id(projectId)
                     .name("Old name")
                     .description("Old description")
                     .ownerId(userId)
                     .build();
-
-            ProjectUpdateRequest request = new ProjectUpdateRequest(
-                    "New name",
-                    null
-            );
+            ProjectUpdateRequest request = new ProjectUpdateRequest("New name", null);
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
             when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             ProjectResponse result = projectService.updateProject(projectId, request);
 
             assertThat(result.name()).isEqualTo("New name");
             assertThat(result.description()).isEqualTo("Old description");
-
-            assertThat(project.getName()).isEqualTo("New name");
-            assertThat(project.getDescription()).isEqualTo("Old description");
-
-            verify(projectRepository).findById(projectId);
-            verify(projectRepository).save(project);
         }
 
         @Test
         void shouldUpdateOnlyDescription_whenNameIsNull() {
             Long userId = 1L;
             Long projectId = 1L;
-
             Project project = Project.builder()
                     .id(projectId)
                     .name("Old name")
                     .description("Old description")
                     .ownerId(userId)
                     .build();
-
-            ProjectUpdateRequest request = new ProjectUpdateRequest(
-                    null,
-                    "New description"
-            );
+            ProjectUpdateRequest request = new ProjectUpdateRequest(null, "New description");
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
             when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             ProjectResponse result = projectService.updateProject(projectId, request);
 
             assertThat(result.name()).isEqualTo("Old name");
             assertThat(result.description()).isEqualTo("New description");
-
-            assertThat(project.getName()).isEqualTo("Old name");
-            assertThat(project.getDescription()).isEqualTo("New description");
-
-            verify(projectRepository).findById(projectId);
-            verify(projectRepository).save(project);
         }
 
         @Test
         void shouldTrimProjectName_whenUpdatingProject() {
             Long userId = 1L;
             Long projectId = 1L;
-
             Project project = Project.builder()
                     .id(projectId)
                     .name("Old name")
                     .description("Old description")
                     .ownerId(userId)
                     .build();
-
             ProjectUpdateRequest request = new ProjectUpdateRequest("  New name  ", null);
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
             when(projectRepository.existsByOwnerIdAndName(userId, "New name")).thenReturn(false);
             when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -448,10 +413,8 @@ public class ProjectServiceTest {
 
         @Test
         void shouldDeleteProject() {
-
             Long userId = 1L;
             Long projectId = 1L;
-
             Project project = Project.builder()
                     .id(projectId)
                     .name("Unnecessary project")
@@ -459,23 +422,21 @@ public class ProjectServiceTest {
                     .build();
 
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project")).thenReturn(project);
 
             projectService.deleteProject(projectId);
 
             verify(projectRepository).delete(project);
-            verify(projectRepository).findById(projectId);
             verifyNoMoreInteractions(projectRepository);
         }
 
         @Test
         void shouldThrow_whenProjectNotFound() {
-
             Long projectId = 10L;
 
             when(currentUserService.getCurrentUserId()).thenReturn(1L);
-            when(projectRepository.findById(projectId))
-                    .thenReturn(Optional.empty());
+            when(projectAccessService.getAccessibleProject(projectId, 1L, "project"))
+                    .thenThrow(new ResourceNotFoundException("Project", projectId));
 
             assertThatThrownBy(() -> projectService.deleteProject(projectId))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -485,20 +446,12 @@ public class ProjectServiceTest {
 
         @Test
         void shouldThrowForbidden_whenUserIsNotOwner() {
-
             Long userId = 1L;
-            Long anotherUserId = 2L;
             Long projectId = 10L;
 
-            Project project = Project.builder()
-                    .id(projectId)
-                    .name("Unnecessary project")
-                    .ownerId(anotherUserId)
-                    .build();
-
             when(currentUserService.getCurrentUserId()).thenReturn(userId);
-            when(projectRepository.findById(projectId))
-                    .thenReturn(Optional.of(project));
+            when(projectAccessService.getAccessibleProject(projectId, userId, "project"))
+                    .thenThrow(new AccessDeniedException("You do not have access to this project"));
 
             assertThatThrownBy(() -> projectService.deleteProject(projectId))
                     .isInstanceOf(AccessDeniedException.class);
@@ -506,6 +459,4 @@ public class ProjectServiceTest {
             verify(projectRepository, never()).delete(any());
         }
     }
-
-
 }

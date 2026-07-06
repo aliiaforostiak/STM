@@ -1,5 +1,6 @@
 package com.sula.secure_task_manager.manager.task.controller;
 
+import com.sula.secure_task_manager.common.dto.PageResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sula.secure_task_manager.common.exception.base.BadRequestException;
 import com.sula.secure_task_manager.common.exception.base.ResourceNotFoundException;
@@ -131,6 +132,34 @@ class TaskControllerTest {
                     .andExpect(jsonPath("$").isEmpty());
 
             verify(taskService).getProjectTasks(1L);
+        }
+
+        @Test
+        void getProjectTasksPage_shouldReturnTasksPage() throws Exception {
+            PageResponse<TaskShortResponse> response = new PageResponse<>(
+                    List.of(
+                            new TaskShortResponse(10L, "Implement JWT login", TaskStatus.TODO, TaskPriority.HIGH),
+                            new TaskShortResponse(11L, "Add refresh flow", TaskStatus.IN_PROGRESS, TaskPriority.MEDIUM)
+                    ),
+                    0,
+                    2,
+                    4,
+                    2,
+                    true,
+                    false
+            );
+
+            when(taskService.getProjectTasksPage(1L, 0, 2)).thenReturn(response);
+
+            mockMvc.perform(get("/api/projects/1/tasks/paged?page=0&size=2"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content", hasSize(2)))
+                    .andExpect(jsonPath("$.page").value(0))
+                    .andExpect(jsonPath("$.size").value(2))
+                    .andExpect(jsonPath("$.totalElements").value(4))
+                    .andExpect(jsonPath("$.totalPages").value(2));
+
+            verify(taskService).getProjectTasksPage(1L, 0, 2);
         }
     }
 
